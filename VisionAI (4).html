@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="hi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VisionAI</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1"></script>
+<style>
+:root{--bg:#121212;--card:#1f1f1f;--ink:#f5f5f5;--mut:#a8a8a8;--acc:#2dd4bf;--bad:#f87171;--cur:#34d399;--obj:#fb923c;--prd:#c084fc}
+*{box-sizing:border-box}body{margin:0 auto;font:16px system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:12px;max-width:1200px}
+h1{font-size:22px;margin:4px 0 10px}h2{font-size:16px;margin:0 0 10px;color:var(--c,var(--acc))}
+.card,.box{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px}
+.box{border-top:4px solid var(--c)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}.grid .box{margin:0}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1 1 140px}.stack{display:grid;gap:8px}
+input,select,button{font:inherit;padding:11px;border-radius:10px;border:1px solid #3d3d3d;background:#151515;color:var(--ink);width:100%}
+button{background:var(--acc);color:#042f2b;font-weight:700;border:0;cursor:pointer}button.off{background:var(--bad);color:#fff}button.sec{background:#383838;color:var(--ink)}
+.box>button:not(.sec){background:var(--c);color:#111}
+#view{position:relative;background:#000;border-radius:12px;overflow:hidden;height:calc(100dvh - 200px);min-height:260px}
+#view img,#view video{width:100%;height:100%;object-fit:contain;display:block}#view video{display:none}
+#badge{position:absolute;top:10px;left:10px;padding:5px 12px;border-radius:20px;background:#000b;font-size:14px;border:1px solid var(--acc)}
+#log{max-height:200px;overflow:auto;font-size:14px}#log p{margin:4px 0;padding:6px 8px;background:#151515;border-radius:8px}
+.kb{display:flex;gap:10px;align-items:center;margin:8px 0;background:#151515;border-radius:10px;padding:6px}.kb img{width:52px;height:52px;object-fit:cover;border-radius:8px}.kb span{flex:1;font-size:14px}.kb b{font-size:16px}.kb button{width:auto;padding:6px 10px}
+.big{margin-top:10px;padding:24px;font-size:24px;border-radius:14px}
+.cmd{font-size:20px;padding:20px;min-height:68px;flex:1 1 260px}.cmdbtn{font-size:20px;min-height:68px;flex:0 0 130px}
+small{color:var(--mut)}
+</style></head><body>
+<h1>VisionAI</h1>
+
+<div class="card" style="margin-bottom:16px">
+ <div id="view"><img id="img" alt="live"><video id="vid" autoplay playsinline muted></video><div id="badge">Band hai</div></div>
+ <div class="row" style="margin-top:10px"><button id="go" class="big" style="flex:3 1 200px;margin:0">▶ Start VisionAI</button><button id="talk" class="big sec" style="flex:1 1 130px;margin:0">Tap to talk</button></div>
+</div>
+
+<div class="card"><h2>Command</h2>
+ <div class="row"><input id="txt" class="cmd" placeholder="Type a command (Hindi / Hinglish / English)"><button id="send" class="sec cmdbtn">Send</button></div>
+ <small>Tap to talk dabake bolo (ya Always-listening mode me “Hey Jarvis”). “Bye Jarvis” se band. Start ke baad VisionAI side-by-side detection karta hai aur gaadi/insaan aate dikhe to khud bolta hai. Colour ke liye bolo: “colour batao”.</small>
+</div>
+
+<div class="card"><h2>Log</h2><div id="log"></div></div>
+
+<div class="grid">
+<div class="box" style="--c:var(--cur)"><h2>💵 Currency</h2><div class="stack"><input id="cn" type="number" placeholder="Kitne rupaye ka note? (e.g. 500)">
+<div class="row"><input id="cf" type="file" accept="image/*"><button id="cc" class="sec">📷 Live frame</button></div></div>
+<button id="ca" style="margin-top:8px">+ Add</button><div id="cl"></div></div>
+<div class="box" style="--c:var(--obj)"><h2>🚧 Objects / Obstacles</h2><div class="stack"><input id="on" placeholder="Object name (e.g. Dustbin, Chair)"><input id="od" type="number" placeholder="Distance in cm (optional)">
+<div class="row"><input id="of" type="file" accept="image/*"><button id="oc" class="sec">📷 Live frame</button></div></div>
+<button id="oa" style="margin-top:8px">+ Add</button><div id="ol"></div></div>
+<div class="box" style="--c:var(--prd)"><h2>🛒 Products</h2><div class="stack"><input id="pn" placeholder="Product name (e.g. Parle-G)"><input id="pm" placeholder="Mfg date (optional)"><input id="pe" placeholder="Exp date (optional)">
+<div class="row"><input id="pf" type="file" accept="image/*"><button id="pc" class="sec">📷 Live frame</button></div></div>
+<button id="pa" style="margin-top:8px">+ Add</button><div id="pl"></div></div>
+</div>
+
+<div class="card"><h2>Settings</h2>
+ <div class="row">
+  <select id="src"><option value="esp32">Option 1: ESP32-CAM stream</option><option value="webcam">Option 2: Phone / laptop camera</option></select>
+  <input id="url" placeholder="ESP32 stream URL e.g. http://192.168.1.50:81/stream">
+  <select id="mic"><option value="always">Mic: Always listening, say Hey Jarvis (hands-free)</option><option value="tap">Mic: Button / tap to talk (no repeating beep)</option></select>
+  <input id="btn" placeholder="Physical button URL on glasses (optional) e.g. http://192.168.1.50/button">
+ </div>
+ <div class="row" style="margin-top:8px">
+  <input id="dist" placeholder="Distance sensor URL (optional) returns cm, e.g. http://192.168.1.50/distance">
+ </div>
+ <small>Settings sirf is browser me save hoti hain. Is file ko laptop/phone par kholo (same Wi-Fi jisme ESP32 hai).</small>
+</div>
+
+
+<script>
+const $=i=>document.getElementById(i);
+let kb=[],cfg={},active=false,running=false,speaking=false,busy=false,model=null,mn=null,emb=new WeakMap(),rec=null,hist=[],lastAlert=0,lastDist=0,distCm=null,pending=null;
+try{kb=JSON.parse(localStorage.kb||'[]');cfg=JSON.parse(localStorage.cfg||'{}');}catch(e){}
+['src','url','dist','mic','btn'].forEach(k=>{if(cfg[k])$(k).value=cfg[k];$(k).onchange=()=>{cfg[k]=$(k).value;try{localStorage.cfg=JSON.stringify(cfg)}catch(e){}}});
+cfg.src=$('src').value;
+const el=()=>$('src').value==='webcam'?$('vid'):$('img');
+function log(t,me){const p=document.createElement('p');p.textContent=(me?'🧑 ':'🤖 ')+t;$('log').prepend(p)}
+function badge(t){$('badge').textContent=t}
+
+// ---------- Speech out ----------
+function speak(t){log(t);speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='hi-IN';
+ const v=speechSynthesis.getVoices().find(v=>v.lang==='hi-IN')||speechSynthesis.getVoices().find(v=>v.lang.startsWith('hi'));if(v)u.voice=v;
+ speaking=true;u.onend=u.onerror=()=>{speaking=false};speechSynthesis.speak(u)}
+
+// ---------- Camera ----------
+async function startStream(){
+ if($('src').value==='webcam'){const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});$('vid').srcObject=s;$('vid').style.display='block';$('img').style.display='none'}
+ else{$('vid').style.display='none';$('img').style.display='block';$('img').crossOrigin='anonymous';$('img').src=$('url').value+($('url').value.includes('?')?'&':'?')+'t='+Date.now()}}
+function grab(w=640){const e=el(),ow=e.videoWidth||e.naturalWidth;if(!ow)return null;const oh=e.videoHeight||e.naturalHeight,s=Math.min(1,w/ow);
+ const c=document.createElement('canvas');c.width=ow*s;c.height=oh*s;c.getContext('2d').drawImage(e,0,0,c.width,c.height);return c}
+
+// ---------- Colour (local) ----------
+function colourName(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2,d=mx-mn;let h=0,s=0;
+ if(d){s=d/(1-Math.abs(2*l-1));h=mx==r?((g-b)/d)%6:mx==g?(b-r)/d+2:(r-g)/d+4;h=(h*60+360)%360}
+ if(l<.13)return'काला';if(l>.88)return'सफेद';if(s<.15)return l>.6?'हल्का स्लेटी':'स्लेटी';
+ if(h<15||h>=345)return l>.7?'गुलाबी':'लाल';if(h<40)return l<.38?'भूरा':'नारंगी';if(h<70)return'पीला';if(h<165)return'हरा';if(h<200)return'आसमानी';if(h<255)return'नीला';if(h<290)return'बैंगनी';return'गुलाबी'}
+function detectColour(){const c=grab(160);if(!c)return speak('कैमरा अभी चालू नहीं है।');
+ const w=c.width,h=c.height,d=c.getContext('2d').getImageData(w/2-15,h/2-15,30,30).data;let r=0,g=0,b=0,n=d.length/4;
+ for(let i=0;i<d.length;i+=4){r+=d[i];g+=d[i+1];b+=d[i+2]}speak('इसका रंग '+colourName(r/n,g/n,b/n)+' है।')}
+
+// ---------- Local AI (no external API) ----------
+async function embedOne(k){if(!mn)return;try{const im=new Image();im.src=k.img;await im.decode();emb.set(k,tf.tidy(()=>{const e=mn.infer(im,true);return Array.from(e.div(e.norm()).dataSync())}))}catch(e){}}
+async function embedAll(){for(const k of kb)if(!emb.has(k))await embedOne(k)}
+function frameVec(){const c=grab(224);if(!c)return null;return tf.tidy(()=>{const e=mn.infer(c,true);return Array.from(e.div(e.norm()).dataSync())})}
+function best(type,v){let b=null;kb.forEach(k=>{const e=emb.get(k);if(k.type!==type||!e)return;let d=0;for(let i=0;i<e.length;i++)d+=e[i]*v[i];if(!b||d>b.s)b={k,s:d}});return b}
+function parseD(t){const m=(t||'').match(/(\d{1,2})?[\/\-. ]?(\d{1,2})[\/\-. ](\d{2,4})|(\d{4})/);if(!m)return null;let y,mo=11,d=28;
+ if(m[4]){y=+m[4]}else{y=+m[3];if(y<100)y+=2000;if(m[1]){d=+m[1];mo=+m[2]-1}else mo=+m[2]-1}
+ return new Date(y,mo,d)}
+const HI={person:'इंसान',car:'गाड़ी',bus:'बस',truck:'ट्रक',motorcycle:'बाइक',bicycle:'साइकिल',chair:'कुर्सी',bottle:'बोतल','dining table':'मेज़',couch:'सोफ़ा',bed:'बिस्तर',tv:'टीवी',laptop:'लैपटॉप','cell phone':'फ़ोन',dog:'कुत्ता',cat:'बिल्ली',bench:'बेंच','potted plant':'गमला',backpack:'बैग',umbrella:'छाता',cup:'कप',book:'किताब',refrigerator:'फ्रिज','traffic light':'ट्रैफिक लाइट','stop sign':'स्टॉप साइन'};
+async function say(kind){
+ if(!mn||!model)return speak('AI अभी लोड हो रहा है, थोड़ा रुको।');
+ const v=frameVec();if(!v)return speak('कैमरा अभी चालू नहीं है।');
+ if(kind==='currency'){const b=best('currency',v);if(!b)return speak('पहले Currency सेक्शन में नोट की फोटो जोड़ो।');
+  if(b.s>=.72)return speak(`यह ${b.k.amt} रुपये का नोट है।`);if(b.s>=.6)return speak(`शायद यह ${b.k.amt} रुपये का नोट है। एक बार फिर दिखाओ।`);
+  return speak('नोट पहचान नहीं पाया। नोट को कैमरे के पास सीधा पकड़ो।')}
+ if(kind==='product'){const b=best('product',v);if(!b)return speak('पहले Products सेक्शन में प्रोडक्ट की फोटो जोड़ो।');
+  if(b.s<.6)return speak('प्रोडक्ट पहचान नहीं पाया। उसे कैमरे के पास पकड़ो।');
+  const k=b.k;let t=(b.s<.72?'शायद ':'')+`यह ${k.name} है।`;if(k.mfg)t+=` बनने की तारीख ${k.mfg}।`;if(k.exp){t+=` एक्सपायरी ${k.exp}।`;const d=parseD(k.exp);if(d&&d<new Date())t+=' यह एक्सपायर हो चुका है, इस्तेमाल मत करना!'}
+  return speak(t)}
+ // scene: obstacles
+ const e=el(),W=e.videoWidth||e.naturalWidth,H=e.videoHeight||e.naturalHeight;let res=[];try{res=await model.detect(e)}catch(x){}
+ res=res.filter(r=>r.score>.5).sort((a,b)=>b.bbox[2]*b.bbox[3]-a.bbox[2]*a.bbox[3]).slice(0,3);
+ const parts=[];const ob=best('object',v);if(ob&&ob.s>=.72)parts.push(`सामने ${ob.k.name} है`);
+ res.forEach(r=>{const cx=r.bbox[0]+r.bbox[2]/2,side=cx<W/3?'बाईं तरफ़':cx>2*W/3?'दाईं तरफ़':'सामने';parts.push(`${side} ${HI[r.class]||r.class}`)});
+ let t=parts.length?parts.join(', ')+' है।':'कुछ खास नहीं दिख रहा।';
+ if(distCm!=null&&distCm>0&&distCm<=300)t+=` सेंसर के हिसाब से सामने ${Math.round(distCm)} सेंटीमीटर पर कुछ है।`;
+ speak(t)}
+function route(c){
+ if(/(colou?r|rang|रंग|कलर)/.test(c))return detectColour();
+ if(/(note|rupee|rupay|currency|paise|paisa|नोट|रुपय|रुपए|पैसे|करेंसी)/.test(c))return say('currency');
+ if(/(product|packet|saman|samaan|dawa|dawai|medicine|expiry|expire|\bexp\b|mfg|प्रोडक्ट|पैकेट|सामान|दवा|एक्सपायरी)/.test(c))return say('product');
+ if(/(samne|saamne|aage|obstacle|wall|deewar|diwar|kya hai|what|front|ahead|रुकावट|दीवार|सामने|आगे|क्या है|क्या)/.test(c))return say('scene');
+ speak('समझ नहीं आया। बोलो: नोट कितने का है, प्रोडक्ट बताओ, सामने क्या है, या रंग बताओ।')}
+
+// ---------- Commands ----------
+const JV='(jarvis|jarvish|jarwis|जार्विस|जारविस|जर्विस|जार्विश|ज़ार्विस)';
+function handle(raw){const t=raw.toLowerCase().trim();if(!t)return;log(raw,1);
+ const m=t.match(new RegExp(JV));
+ if(m&&/(bye|बाय|अलविदा|good ?bye)/.test(t)){active=false;badge('Band (Hey Jarvis bolo)');speak('अलविदा! ध्यान से चलना।');return}
+ let cmd=t;if(m){cmd=t.replace(new RegExp('(hey|hi|hello|हे|हाय|हैलो|ok|ओके)?\\s*'+JV),'').trim();
+  if(!active){active=true;badge('Jarvis चालू');speak('जी, बताइए। मैं आपके आस-पास नज़र रख रहा हूँ।');if(!cmd)return}}
+ if(!active)return;if(!cmd)return speak('जी, बोलिए।');
+ route(cmd)}
+
+function listen(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return log('Is browser me voice recognition nahi hai. Chrome use karo.');
+ const always=$('mic').value==='always';let ok=true;
+ rec=new SR();rec.lang='hi-IN';rec.continuous=always;rec.interimResults=false;
+ rec.onresult=e=>{if(speaking&&always)return;for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal)handle(e.results[i][0].transcript)};
+ rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){ok=false;log('Mic permission band hai. Browser me mic allow karo.')}};
+ rec.onend=()=>{if(!running)return;if(always){if(ok)setTimeout(()=>{if(running)try{rec.start()}catch(x){}},800)}else badge(active?'Jarvis चालू':'Tap to talk dabao')};
+ if(always)try{rec.start()}catch(e){}}
+function talkNow(){if(!running||!rec)return log('Pehle Start VisionAI dabao.');if($('mic').value==='always')return;
+ speechSynthesis.cancel();speaking=false;if(!active)active=true;badge('सुन रहा हूँ…');try{rec.start()}catch(e){}}
+$('talk').onclick=talkNow;
+$('mic').addEventListener('change',()=>{if(running){try{rec.onend=null;rec.stop()}catch(e){}listen()}});
+
+// ---------- Side-by-side hazard detection ----------
+const HAZ={car:'गाड़ी',truck:'ट्रक',bus:'बस',motorcycle:'बाइक',bicycle:'साइकिल',person:'इंसान'};
+let lastBtn=0,btnDown=false;
+async function loop(){if(!running)return;
+ if($('btn').value&&Date.now()-lastBtn>400){lastBtn=Date.now();fetch($('btn').value).then(r=>r.text()).then(t=>{const d=t.trim()==='1';if(d&&!btnDown)talkNow();btnDown=d}).catch(()=>{})}
+ if($('dist').value&&Date.now()-lastDist>600){lastDist=Date.now();fetch($('dist').value).then(r=>r.text()).then(t=>{const v=parseFloat(t);if(!isNaN(v)){distCm=v;if(active&&v>0&&v<=100&&Date.now()-lastAlert>5000){lastAlert=Date.now();speak('सावधान! करीब एक मीटर पर रुकावट या दीवार है।')}}}).catch(()=>{})}
+ if(active&&model&&!busy&&!speaking){busy=true;try{const e=el();if((e.videoWidth||e.naturalWidth)){const res=await model.detect(e),W=e.videoWidth||e.naturalWidth,H=e.videoHeight||e.naturalHeight,now=Date.now();
+   let best=null;res.filter(r=>HAZ[r.class]&&r.score>.5).forEach(r=>{const a=r.bbox[2]*r.bbox[3]/(W*H);if(!best||a>best.a)best={a,c:r.class,cx:r.bbox[0]+r.bbox[2]/2}});
+   hist.push({t:now,a:best?best.a:0,c:best?.c});hist=hist.filter(h=>now-h.t<1500);
+   if(best&&best.a>.05&&now-lastAlert>4000){const old=hist.find(h=>h.c===best.c&&now-h.t>600);
+    if(old&&old.a>0&&best.a/old.a>1.35){lastAlert=now;const side=best.cx<W/3?'बाईं तरफ़ से':best.cx>2*W/3?'दाईं तरफ़ से':'सामने से';speak(`ध्यान दो! ${side} ${HAZ[best.c]} तेज़ी से पास आ रही है!`)}}}}catch(e){}busy=false}
+ setTimeout(loop,400)}
+
+// ---------- Buttons ----------
+$('go').onclick=async()=>{
+ if(running){running=false;active=false;try{rec.stop()}catch(e){}speechSynthesis.cancel();$('go').textContent='▶ Start VisionAI';$('go').classList.remove('off');badge('Band hai');return}
+ try{await startStream()}catch(e){return log('Camera shuru nahi hua: '+e.message)}
+ running=true;$('go').textContent='■ Stop';$('go').classList.add('off');badge($('mic').value==='tap'?'Button dabao aur bolo':'Suniye… “Hey Jarvis” boliye');
+ if(!model||!mn){badge('AI load ho raha hai…');try{model=model||await cocoSsd.load();mn=mn||await mobilenet.load({version:2,alpha:1.0});await embedAll();badge($('mic').value==='tap'?'Button dabao aur bolo':'Suniye… “Hey Jarvis” boliye')}catch(e){log('AI model load nahi hua (internet check karo): '+e.message)}}
+ listen();loop();speak('VisionAI चालू हो गया। '+($('mic').value==='always'?'हे जार्विस बोलकर शुरू करो।':'बटन दबाकर बोलो।'))};
+$('send').onclick=()=>{const v=$('txt').value;$('txt').value='';if(v){if(!active&&!/jarvis|जार्विस/i.test(v)){active=true;badge('Jarvis चालू')}handle(v)}};
+$('txt').onkeydown=e=>{if(e.key==='Enter')$('send').click()};
+
+// ---------- Knowledge base ----------
+function shrink(src){return new Promise(res=>{const i=new Image();i.onload=()=>{const s=Math.min(1,320/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;c.getContext('2d').drawImage(i,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.6))};i.src=src})}
+const T={c:'currency',o:'object',p:'product'},pend={};
+function save(){try{localStorage.kb=JSON.stringify(kb)}catch(e){log('Storage full — kuch purani photos delete karo.')}}
+Object.keys(T).forEach(p=>{
+ $(p+'f').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{pend[p]=await shrink(r.result);log('Photo ready: '+f.name)};r.readAsDataURL(f)};
+ $(p+'c').onclick=()=>{const c=grab(320);if(!c)return log('Pehle stream start karo.');pend[p]=c.toDataURL('image/jpeg',.6);log('Live frame photo ready')};
+ $(p+'a').onclick=()=>{const k={type:T[p],img:pend[p]};
+  if(p==='c'){const a=$('cn').value.trim();if(a){k.amt=a;k.name=a+' rupee note'}}
+  if(p==='o'){k.name=$('on').value.trim();k.dist=$('od').value}
+  if(p==='p'){k.name=$('pn').value.trim();k.mfg=$('pm').value.trim();k.exp=$('pe').value.trim()}
+  if(!k.name||!k.img)return log(p==='c'?'Amount aur photo dono chahiye.':'Name aur photo dono chahiye.');
+  kb.push(k);embedOne(k);pend[p]=null;[p+'f',p+'n',p+'d',p+'m',p+'e'].forEach(i=>{if($(i))$(i).value=''});save();render()}});
+function render(){Object.keys(T).forEach(p=>{$(p+'l').innerHTML='';
+ kb.forEach((k,i)=>{if(k.type!==T[p])return;const d=document.createElement('div');d.className='kb';
+  d.innerHTML='<img src="'+k.img+'"><span><b></b><br><small></small></span><button class="sec">✕</button>';
+  d.querySelector('b').textContent=p==='c'?'₹'+k.amt:k.name;
+  d.querySelector('small').textContent=p==='c'?'Currency note':p==='o'?(k.dist?'Distance '+k.dist+' cm':'Object'):'Mfg: '+(k.mfg||'-')+'  ·  Exp: '+(k.exp||'-');
+  d.querySelector('button').onclick=()=>{kb.splice(i,1);save();render()};$(p+'l').appendChild(d)})})}
+render();speechSynthesis.getVoices();
+</script></body></html>
