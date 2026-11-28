@@ -1,0 +1,681 @@
+<!doctype html>
+<!--
+LIMITATIONS: Object detection (COCO-SSD) recognises about 80 common classes and can miss or mislabel objects.
+Distance and approach speed are estimates from bounding-box size, so treat them as rough guides.
+Currency reading (OCR) depends on print quality, lighting and a flat, close note.
+Voice depends on the voices installed on the device.
+-->
+
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jarvis · Aapki aankhon ki awaaz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<style>
+:root{
+  --bg:#07090f; --bg2:#0d1120;
+  --surface:rgba(255,255,255,.035); --surface-strong:rgba(255,255,255,.06);
+  --line:rgba(255,255,255,.09); --text:#eef1fb; --muted:#8d96b3;
+  --sun:#38bdf8; --ember:#fb7185; --mint:#5eead4;
+  --grad:linear-gradient(120deg,#38bdf8 0%,#818cf8 55%,#f472b6 100%);
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f6f3ec; --bg2:#ffffff;
+    --surface:rgba(255,255,255,.75); --surface-strong:#ffffff;
+    --line:rgba(20,25,45,.1); --text:#161b30; --muted:#5d6584;
+    --sun:#0369a1; --ember:#e11d48; --mint:#0f766e;
+    --grad:linear-gradient(120deg,#0284c7,#7c3aed 60%,#db2777);
+    color-scheme:light;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; min-height:100vh; color:var(--text);
+  font-family:"Atkinson Hyperlegible",system-ui,sans-serif; font-size:18px; line-height:1.55;
+  background:
+    radial-gradient(1000px 600px at 85% -10%, color-mix(in srgb,var(--sun) 14%, transparent), transparent 60%),
+    radial-gradient(800px 500px at -10% 35%, color-mix(in srgb,var(--mint) 9%, transparent), transparent 60%),
+    var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{font-family:Manrope,system-ui,sans-serif}
+p{margin:0}
+a{color:inherit}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+:focus-visible{outline:3px solid var(--sun);outline-offset:3px;border-radius:8px}
+
+/* Nav */
+.nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  background:color-mix(in srgb,var(--bg) 72%,transparent);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;height:68px}
+.logo{display:flex;align-items:center;gap:10px;font-family:Manrope;font-weight:800;font-size:22px;letter-spacing:-.02em;text-decoration:none}
+.logo-mark{width:30px;height:30px;border-radius:9px;background:var(--grad);display:grid;place-items:center;box-shadow:0 6px 20px -6px var(--sun)}
+.logo-mark::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--bg)}
+.nav-links{display:flex;gap:28px;color:var(--muted);font-size:15px}
+.nav-links a{text-decoration:none}
+.nav-links a:hover{color:var(--text)}
+@media (max-width:720px){.nav-links{display:none}}
+
+/* Buttons */
+.cta{display:inline-flex;align-items:center;gap:8px;min-height:46px;padding:10px 20px;border-radius:999px;background:var(--grad);color:#0b0d14;
+  font-family:Manrope;font-weight:700;font-size:16px;text-decoration:none;box-shadow:0 12px 30px -12px var(--sun)}
+.ghost{display:inline-flex;align-items:center;min-height:46px;padding:10px 20px;border-radius:999px;border:1px solid var(--line);
+  color:var(--text);text-decoration:none;font-family:Manrope;font-weight:600;font-size:16px;background:var(--surface)}
+.ghost:hover{border-color:var(--sun)}
+
+/* Hero */
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center;padding:88px 0 56px}
+@media (max-width:860px){.hero{grid-template-columns:1fr;padding-top:56px}}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid var(--line);border-radius:999px;
+  background:var(--surface);color:var(--muted);font-size:14px}
+.eyebrow i{width:6px;height:6px;border-radius:50%;background:var(--mint);box-shadow:0 0 0 4px color-mix(in srgb,var(--mint) 18%,transparent)}
+h1{font-weight:800;font-size:clamp(40px,6vw,72px);line-height:1.02;letter-spacing:-.035em;margin:22px 0 18px}
+h1 span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:20px;color:var(--muted);max-width:52ch;margin-bottom:30px}
+.actions{display:flex;gap:12px;flex-wrap:wrap}
+
+.orb{position:relative;width:min(100%,440px);aspect-ratio:1;justify-self:center}
+.orb .ring{position:absolute;inset:0;border-radius:50%;border:1px solid var(--line)}
+.orb .r2{inset:9%;border-style:dashed}
+.orb .r3{inset:-6%;opacity:.45}
+.orb .core{position:absolute;inset:20%;border-radius:50%;background:var(--grad);opacity:.85;filter:blur(6px);animation:breathe 6s ease-in-out infinite}
+.chip{position:absolute;padding:9px 14px;border-radius:14px;background:var(--bg2);border:1px solid var(--line);font-size:14px;white-space:nowrap;
+  box-shadow:0 14px 34px -12px rgba(0,0,0,.5)}
+.c1{top:10%;left:-6%}
+.c2{bottom:16%;right:-4%}
+.c3{top:46%;right:-12%}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:22px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.card-head h2{font-size:18px;font-weight:700;margin:0}
+
+/* Live app */
+.app{display:grid;grid-template-columns:1.25fr .75fr;gap:20px;scroll-margin-top:90px}
+@media (max-width:900px){.app{grid-template-columns:1fr}}
+.live{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.t-on{display:none}
+.app:has(#startBtn[data-running="true"]) .live{color:var(--mint)}
+.app:has(#startBtn[data-running="true"]) .live i{background:var(--mint);animation:ping 1.8s infinite}
+.app:has(#startBtn[data-running="true"]) .t-on{display:inline}
+.app:has(#startBtn[data-running="true"]) .t-off{display:none}
+@keyframes ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--mint) 55%,transparent)}70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
+
+.frame{position:relative;aspect-ratio:4/3;border-radius:18px;overflow:hidden;background:#04060b;border:1px solid var(--line)}
+.frame::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;pointer-events:none;opacity:0;
+  background:linear-gradient(90deg,transparent,var(--mint),transparent);box-shadow:0 0 14px var(--mint)}
+.app:has(#startBtn[data-running="true"]) .frame::after{opacity:.9;animation:scan 3.2s linear infinite}
+@keyframes scan{from{transform:translateY(0)}to{transform:translateY(calc(100% * 4 / 3))}}
+#cam,#overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+#overlay{pointer-events:none}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);background:radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--sun) 10%,transparent),transparent 65%)}
+.empty[hidden]{display:none}
+.empty p{max-width:30ch}
+
+.primary-wide{width:100%;min-height:60px;border:0;border-radius:16px;background:var(--grad);color:#0b0d14;cursor:pointer;
+  font-family:Manrope;font-weight:800;font-size:18px;box-shadow:0 16px 40px -16px var(--sun);transition:transform .15s ease}
+.primary-wide:hover{transform:translateY(-1px)}
+.primary-wide[data-running="true"]{background:var(--surface-strong);color:var(--text);box-shadow:none;border:1px solid var(--line)}
+
+.status{margin-top:14px;min-height:3.2em;padding:12px 14px;border-radius:14px;background:var(--surface-strong);border:1px solid var(--line);font-size:17px}
+.status.warn{color:var(--ember);border-color:color-mix(in srgb,var(--ember) 45%,transparent)}
+
+.modes{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:16px}
+button{font:inherit;color:var(--text);cursor:pointer;background:var(--surface-strong);border:1px solid var(--line);border-radius:14px;
+  padding:12px;min-height:52px;transition:border-color .2s ease,color .2s ease,background .2s ease}
+button:hover{border-color:var(--sun)}
+button:focus-visible{outline:3px solid var(--sun);outline-offset:3px}
+button[aria-pressed="true"]{background:var(--grad);color:#0b0d14;border-color:transparent;font-weight:700}
+.hint{margin-top:16px;font-size:14px;color:var(--muted)}
+
+/* Features */
+.section-title{font-size:clamp(28px,3.5vw,40px);font-weight:800;letter-spacing:-.025em;margin:88px 0 8px;scroll-margin-top:90px}
+.section-sub{color:var(--muted);font-size:18px;margin-bottom:28px;max-width:60ch}
+.features{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media (max-width:960px){.features{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.features{grid-template-columns:1fr}}
+.feature{padding:24px;transition:border-color .25s ease,transform .25s ease}
+.feature:hover{border-color:color-mix(in srgb,var(--sun) 50%,transparent);transform:translateY(-3px)}
+.ico{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--surface-strong);border:1px solid var(--line);margin-bottom:18px;color:var(--sun)}
+.ico svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.feature h3{font-size:18px;font-weight:700;margin:0 0 8px}
+.feature p{color:var(--muted);font-size:16px}
+
+/* Log */
+.log{margin-top:0}
+.log ol{margin:0;padding:0;list-style:none;display:grid;gap:8px;max-height:360px;overflow:auto}
+.log li{padding:12px 14px;border-radius:14px;background:var(--surface-strong);border:1px solid var(--line);font-size:16px}
+.log li:first-child{border-color:color-mix(in srgb,var(--mint) 45%,transparent)}
+.log-empty{color:var(--muted);font-size:16px}
+
+footer{margin:88px 0 32px;padding-top:24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:14px}
+
+.card-head .sub{font-size:14px;color:var(--muted)}
+.frame{aspect-ratio:4/3;border-radius:20px;border:0;
+  background:radial-gradient(circle at 50% 35%,#16234a 0%,#0a0f1f 55%,#04060b 100%);
+  box-shadow:inset 0 0 0 1px var(--line),0 30px 60px -30px rgba(0,0,0,.85)}
+.frame .grid-bg{position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:44px 44px;
+  -webkit-mask-image:radial-gradient(circle at center,#000 25%,transparent 80%);mask-image:radial-gradient(circle at center,#000 25%,transparent 80%)}
+.frame .corner{position:absolute;width:30px;height:30px;border:3px solid var(--muted);opacity:.6;z-index:2;pointer-events:none;transition:border-color .3s,opacity .3s}
+.corner.tl{top:44px;left:14px;border-right:0;border-bottom:0;border-radius:10px 0 0 0}
+.corner.tr{top:44px;right:14px;border-left:0;border-bottom:0;border-radius:0 10px 0 0}
+.corner.bl{bottom:14px;left:14px;border-right:0;border-top:0;border-radius:0 0 0 10px}
+.corner.br{bottom:14px;right:14px;border-left:0;border-top:0;border-radius:0 0 10px 0}
+.app:has(#startBtn[data-running="true"]) .corner{border-color:var(--mint);opacity:1}
+.hud{position:absolute;top:12px;left:12px;right:12px;z-index:3;display:flex;justify-content:space-between;align-items:center;pointer-events:none}
+.glass{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;font-size:13px;
+  background:color-mix(in srgb,#07090f 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--line);color:var(--text)}
+.glass i{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.app:has(#startBtn[data-running="true"]) .glass.live-chip i{background:var(--mint);box-shadow:0 0 10px var(--mint)}
+.empty{text-align:center;z-index:4}
+.emp-ico{width:68px;height:68px;margin:0 auto 16px;border-radius:22px;display:grid;place-items:center;color:var(--sun);
+  background:linear-gradient(145deg,color-mix(in srgb,var(--sun) 18%,transparent),transparent);border:1px solid color-mix(in srgb,var(--sun) 35%,transparent)}
+.emp-ico svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.emp-title{font-family:Manrope,sans-serif;font-weight:800;font-size:20px;color:var(--text);margin-bottom:6px}
+.readout{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:3;pointer-events:none;white-space:nowrap;
+  padding:8px 16px;border-radius:14px;font-size:15px;background:color-mix(in srgb,#07090f 65%,transparent);backdrop-filter:blur(8px);border:1px solid var(--line);color:var(--text)}
+.readout b{color:var(--sun);font-family:Manrope,sans-serif}
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap">
+    <a class="logo" href="#"><span class="logo-mark" aria-hidden="true"></span>Jarvis</a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#app">Camera</a>
+      <a href="#log">Activity</a>
+    </nav>
+    <a class="cta" href="#app">Camera kholein</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div>
+      <span class="eyebrow"><i aria-hidden="true"></i>Hinglish voice · Live camera · Bilkul free</span>
+      <h1>Aapki aankhon ki <span>awaaz</span>, jo raasta dikhaati hai.</h1>
+      <p class="lede">Jarvis aapke camera se rukawat, cheezein aur note pehchanta hai, aur Hinglish mein bolkar batata hai ki kya kahan hai aur kitni door.</p>
+      <div class="actions">
+        <a class="cta" href="#app">Shuru karein</a>
+        <a class="ghost" href="#features">Kaise kaam karta hai</a>
+      </div>
+    </div>
+    <div class="orb" aria-hidden="true">
+      <span class="ring"></span><span class="ring r2"></span><span class="ring r3"></span><span class="core"></span>
+      <span class="chip c1">Rukawat · 2.5 m</span>
+      <span class="chip c2">Bottle · seedha aage</span>
+      <span class="chip c3">₹500 ka note</span>
+    </div>
+  </section>
+
+  <section id="app" class="app">
+    <div class="card">
+      <div class="card-head">
+        <h2>Live camera</h2>
+        <span class="live"><i aria-hidden="true"></i><span class="t-off">Band</span><span class="t-on">Live</span></span>
+      </div>
+      <section class="frame" aria-label="Camera view">
+        <div class="grid-bg" aria-hidden="true"></div>
+        <video id="cam" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <span class="corner tl" aria-hidden="true"></span><span class="corner tr" aria-hidden="true"></span>
+        <span class="corner bl" aria-hidden="true"></span><span class="corner br" aria-hidden="true"></span>
+        <div class="hud" aria-hidden="true">
+          <span class="glass"><i></i>Camera feed</span>
+          <span class="glass live-chip"><i></i>AI detection</span>
+        </div>
+        <div id="empty" class="empty">
+          <div>
+            <div class="emp-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div>
+            <p class="emp-title">Camera abhi band hai</p>
+            <p>Neeche <strong>Shuru</strong> dabayein, Jarvis raasta dekhna shuru karega.</p>
+          </div>
+        </div>
+        <div class="readout" aria-hidden="true">Mode: <b>Rasta</b> · Taiyaar</div>
+      </section>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Controls</h2></div>
+      <button id="startBtn" class="primary-wide" data-running="false">Shuru</button>
+      <p id="status" class="status" aria-live="assertive">Jarvis taiyaar hai.</p>
+      <div class="modes" role="group" aria-label="Mode chunein">
+        <button data-mode="rasta" aria-pressed="true">Rasta</button>
+        <button data-mode="product" aria-pressed="false">Cheez</button>
+        <button id="currencyBtn">Paisa</button>
+        <button id="repeatBtn">Dohrao</button>
+        <button id="voiceBtn" aria-pressed="false" style="grid-column:span 2">Voice on</button>
+      </div>
+      <p class="hint">Bolein: "Jarvis, rasta" · "Jarvis, cheez" · "Jarvis, paisa" · "Jarvis, dohrao" · "Jarvis, ruko"</p>
+    </div>
+  </section>
+
+  <h2 id="log" class="section-title" style="font-size:clamp(24px,3vw,32px);margin:36px 0 14px">Jarvis ne kya kaha</h2>
+  <section class="card log" aria-label="Jarvis ki baatein">
+    <ol id="log"></ol>
+  </section>
+
+  <h2 id="features" class="section-title">Teen kaam, ek awaaz.</h2>
+  <p class="section-sub">Jarvis ek hi jagah se raasta, cheezein aur paisa, sab pehchanta hai.</p>
+  <section class="features">
+    <article class="card feature">
+      <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18h6a4 4 0 0 0 0-8h-4a4 4 0 0 1 0-8h6"/></svg></div>
+      <h3>Rasta</h3>
+      <p>Rukawat ka naam, distance aur kaunsi taraf se jaana hai, sab bataata hai.</p>
+    </article>
+    <article class="card feature">
+      <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></div>
+      <h3>Cheez</h3>
+      <p>Saamne ki bottle, cup, kitaab ya phone pehchanta hai aur batata hai kahan hai.</p>
+    </article>
+    <article class="card feature">
+      <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 8h8M8 12h8M10 8v9M10 12c3 0 4 1 4 4"/></svg></div>
+      <h3>Paisa</h3>
+      <p>Note ko camera ke saamne rakhein, Jarvis number padh kar bata dega.</p>
+    </article>
+    <article class="card feature">
+      <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h0M8 9v6M12 5v14M16 8v8M20 11v2"/></svg></div>
+      <h3>Voice</h3>
+      <p>"Jarvis" bolkar koi bhi kaam shuru karein. Haath free rehte hain.</p>
+    </article>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <span>Jarvis · Aapki aankhon ki awaaz</span>
+  <span>Helper hai, cane ya guide ka vikalp nahi.</span>
+</footer>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const video = $('#cam'), canvas = $('#overlay'), ctx = canvas.getContext('2d');
+  const statusEl = $('#status'), startBtn = $('#startBtn'), logEl = $('#log');
+
+  const OBSTACLES = new Set(['person','car','truck','bus','motorcycle','bicycle','chair','couch','dining table',
+    'potted plant','dog','cat','bench','fire hydrant','stop sign','traffic light','suitcase','backpack','bed',
+    'refrigerator','tv','toilet']);
+  const PRODUCTS = new Set(['bottle','cup','bowl','book','cell phone','laptop','apple','banana','orange',
+    'sandwich','donut','cake','pizza','scissors','handbag','vase','clock','umbrella']);
+  const REAL_H = {person:1.7,car:1.5,truck:3,bus:3.2,motorcycle:1.2,bicycle:1.1,chair:0.9,couch:0.85,bed:0.6,
+    'dining table':0.75,tv:0.6,'potted plant':0.6,dog:0.5,cat:0.25,bench:0.5,'fire hydrant':0.8,'stop sign':2.2,
+    'traffic light':3,backpack:0.45,suitcase:0.6,handbag:0.3,bottle:0.25,cup:0.12,book:0.22,laptop:0.25,
+    'cell phone':0.15,refrigerator:1.7,toilet:0.4,sink:0.3,umbrella:1,clock:0.3,bowl:0.1,scissors:0.2,
+    vase:0.25,apple:0.08,banana:0.2,orange:0.08,sandwich:0.1,donut:0.08,cake:0.1,pizza:0.04};
+  const HINDI = {person:'insaan',car:'gaadi',truck:'truck',bus:'bus',motorcycle:'bike',bicycle:'cycle',
+    chair:'kursi',couch:'sofa',bed:'bed','dining table':'mez',tv:'TV',laptop:'laptop','cell phone':'phone',
+    bottle:'bottle',cup:'cup',book:'kitaab',backpack:'bag',handbag:'purse',suitcase:'suitcase',umbrella:'chhatri',
+    dog:'kutta',cat:'billi',bench:'bench','potted plant':'paudha','fire hydrant':'hydrant','stop sign':'stop board',
+    'traffic light':'traffic signal',refrigerator:'fridge',toilet:'toilet',sink:'sink',clock:'ghadi',vase:'vase',
+    scissors:'kainchi',bowl:'katori',apple:'seb',banana:'kela',orange:'santra',sandwich:'sandwich',pizza:'pizza',
+    cake:'cake',donut:'donut'};
+  const FEMININE = new Set(['gaadi','kursi','mez','billi','kitaab','bag','chhatri','ghadi','TV','kainchi','katori','santra']);
+  const ZONE_TEXT = {left:'baayein taraf', right:'daayein taraf', center:'seedha aage'};
+  const HFOV = 60 * Math.PI / 180;
+  const DENOMS = [2000, 500, 200, 100, 50, 20, 10];
+
+  let model = null, stream = null, running = false, mode = 'rasta', voice = null;
+  let voiceOn = false, rec = null, loopTimer = null;
+  let tracks = [], nextId = 1;
+  let lastText = '', lastAt = 0, urgentAt = 0, lastClearAt = 0, lastNoneAt = 0, lastNearestText = '';
+  let ocrWorker = null;
+
+  const name = l => HINDI[l] || l;
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const fmt = d => String(Math.max(0.5, Math.round(d * 2) / 2));
+  const zoneOf = (b, W) => { const r = (b[0] + b[2] / 2) / W; return r < 0.36 ? 'left' : r > 0.64 ? 'right' : 'center'; };
+  const verb = l => FEMININE.has(name(l)) ? 'rahi' : 'raha';
+  const distanceM = (p, W) => {
+    const h = REAL_H[p.class] ?? 0.5;
+    const focal = (W / 2) / Math.tan(HFOV / 2);
+    return Math.min(20, Math.max(0.3, (h * focal) / p.bbox[3]));
+  };
+
+  // ---------- Voice output ----------
+  function pickVoice() {
+    const v = speechSynthesis.getVoices();
+    voice = v.find(x => /en-IN/i.test(x.lang))
+         || v.find(x => /India|Heera|Ravi|Kalpana/i.test(x.name))
+         || v.find(x => /hi-IN/i.test(x.lang))
+         || v.find(x => /en-GB/i.test(x.lang)) || v[0] || null;
+  }
+  if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+
+  function logLine(t) {
+    const li = document.createElement('li');
+    li.textContent = t;
+    logEl.prepend(li);
+    while (logEl.children.length > 10) logEl.lastChild.remove();
+  }
+
+  // Urgent: always speaks and interrupts. Force: speaks and interrupts (confirmations, commands).
+  // Normal: never interrupts; skipped while Jarvis is already talking.
+  function say(text, { urgent = false, force = false } = {}) {
+    if (!text) return;
+    const now = Date.now();
+    if (urgent) {
+      speechSynthesis.cancel();
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    } else if (force) {
+      speechSynthesis.cancel();
+    } else {
+      if (speechSynthesis.speaking) return;
+      if (text === lastText && now - lastAt < 5000) return;
+    }
+    if (!('speechSynthesis' in window)) { statusEl.textContent = text; return; }
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = voice ? voice.lang : 'en-IN';
+    if (voice) u.voice = voice;
+    u.rate = 0.95; u.pitch = 1.0;
+    speechSynthesis.speak(u);
+    lastText = text; lastAt = now;
+    if (urgent) urgentAt = now;
+    statusEl.textContent = text;
+    statusEl.className = 'status' + (urgent ? ' warn' : '');
+    logLine(text);
+  }
+
+  // ---------- Tracking across frames ----------
+  function updateTracks(preds) {
+    const W = video.videoWidth, now = performance.now() / 1000;
+    const dets = preds.filter(p => p.score > 0.5 && (OBSTACLES.has(p.class) || PRODUCTS.has(p.class)));
+    const used = new Set();
+    for (const det of dets) {
+      const cx = det.bbox[0] + det.bbox[2] / 2, cy = det.bbox[1] + det.bbox[3] / 2;
+      let best = null, bestDist = Infinity;
+      for (const t of tracks) {
+        if (used.has(t.id) || t.label !== det.class) continue;
+        const dist = Math.hypot((t.cx - cx) / W, (t.cy - cy) / W);
+        if (dist < 0.2 && dist < bestDist) { best = t; bestDist = dist; }
+      }
+      if (!best) {
+        best = { id: nextId++, label: det.class, history: [], announced: false, announcedD: null,
+                 announcedZone: null, warned: false, speed: 0 };
+        tracks.push(best);
+      }
+      used.add(best.id);
+      const d = distanceM(det, W);
+      Object.assign(best, {
+        cx, cy, d, bbox: det.bbox, zone: zoneOf(det.bbox, W), lastSeen: now,
+        edge: det.bbox[0] < 4 || det.bbox[0] + det.bbox[2] > W - 4
+      });
+      best.history.push({ t: now, d });
+      if (best.history.length > 8) best.history.shift();
+      // Closing speed in m/s from distance change over the recent window (positive = coming closer).
+      const first = best.history[0], last = best.history[best.history.length - 1];
+      const dt = last.t - first.t;
+      best.speed = dt > 0.3 ? (first.d - last.d) / dt : 0;
+    }
+    tracks = tracks.filter(t => now - t.lastSeen < 1.5);
+    return tracks.filter(t => t.lastSeen === now);
+  }
+
+  const isApproaching = t => !t.edge && t.speed > 0.3;
+  const timeToContact = t => isApproaching(t) ? t.d / t.speed : Infinity;
+
+  // ---------- Rasta: obstacle guidance and approach alerts ----------
+  function describe(t) {
+    return `${cap(ZONE_TEXT[t.zone])} ${name(t.label)} hai, lagbhag ${fmt(t.d)} meter door.`;
+  }
+
+  function rastaDecide(vis) {
+    const now = Date.now();
+    const obs = vis.filter(t => OBSTACLES.has(t.label)).sort((a, b) => a.d - b.d);
+
+    if (!obs.length) {
+      tracks = tracks.filter(t => !OBSTACLES.has(t.label));
+      if (lastNearestText && now - lastClearAt > 1000) { lastNearestText = ''; say('Raasta saaf hai.'); lastClearAt = now; return; }
+      if (now - lastClearAt >= 10000) { say('Raasta saaf hai.'); lastClearAt = now; }
+      return;
+    }
+
+    // 1. Urgent: very close in the centre, or coming fast toward the user.
+    if (now - urgentAt >= 1500) {
+      const urgentT = obs.find(t => t.zone === 'center' && (t.d < 1.5 || timeToContact(t) < 3)) ||
+                      obs.find(t => isApproaching(t) && timeToContact(t) < 3 && t.d < 8);
+      if (urgentT) {
+        const coming = isApproaching(urgentT);
+        const body = coming
+          ? `${name(urgentT.label)} aap ki taraf tezi se aa ${verb(urgentT.label)} hai.`
+          : `${cap(name(urgentT.label))} bahut paas hai.`;
+        const lead = urgentT.d < 1.5 ? 'Ruko! ' : 'Dhyan do! ';
+        const tail = urgentT.d < 1.5 ? '' : ' Ruk jaiye!';
+        say(lead + body + tail, { urgent: true });
+        urgentT.announcedD = urgentT.d;
+        return;
+      }
+    }
+
+    // 2. Warning: approaching but still more than 3 seconds away.
+    const approaching = obs.find(t => isApproaching(t) && !t.warned);
+    if (approaching) {
+      approaching.warned = true;
+      say(`${cap(name(approaching.label))} aap ki taraf aa ${verb(approaching.label)} hai, lagbhag ${fmt(approaching.d)} meter door.`);
+      return;
+    }
+
+    // 3. New obstacle entering view.
+    const fresh = obs.find(t => !t.announced);
+    if (fresh) {
+      fresh.announced = true; fresh.announcedD = fresh.d; fresh.announcedZone = fresh.zone;
+      say(describe(fresh));
+      return;
+    }
+
+    // 4. Obstacle moved into the centre path or got clearly closer.
+    const changed = obs.find(t => (t.zone === 'center' && t.announcedZone !== 'center') ||
+                                  (t.announcedD !== null && t.announcedD - t.d >= 1));
+    if (changed) {
+      changed.announcedZone = changed.zone; changed.announcedD = changed.d;
+      let text = describe(changed);
+      if (changed.zone === 'center') {
+        const leftBlocked = obs.some(t => t.zone === 'left' && t.d < 2);
+        const rightBlocked = obs.some(t => t.zone === 'right' && t.d < 2);
+        text += !leftBlocked ? ' Baayein se jaiye.' : !rightBlocked ? ' Daayein se jaiye.' : ' Dono taraf rukawat hai, ruk jaiye.';
+      }
+      say(text);
+      return;
+    }
+
+    // 5. Nothing changed: repeat the nearest obstacle every 10 seconds so Jarvis never goes silent.
+    if (now - lastAt >= 10000) say(describe(obs[0]));
+  }
+
+  // ---------- Cheez: product recognition ----------
+  function cheezDecide(vis) {
+    const now = Date.now();
+    const items = vis.filter(t => PRODUCTS.has(t.label)).sort((a, b) => a.cx - b.cx);
+    if (!items.length) {
+      tracks = tracks.filter(t => !PRODUCTS.has(t.label));
+      if (now - lastNoneAt >= 10000) { say('Koi cheez nahi dikh rahi.'); lastNoneAt = now; }
+      return;
+    }
+    const fresh = items.find(t => !t.announced);
+    if (fresh) {
+      fresh.announced = true;
+      const others = items.filter(t => t !== fresh).map(t => name(t.label));
+      say(`${cap(ZONE_TEXT[fresh.zone])} ${name(fresh.label)} hai.` + (others.length ? ` Aur bhi: ${[...new Set(others)].join(', ')}.` : ''));
+      return;
+    }
+    if (now - lastAt >= 10000) say(`${cap(ZONE_TEXT[items[0].zone])} ${name(items[0].label)} hai.`);
+  }
+
+  // ---------- Paisa: currency ----------
+  async function readCurrency() {
+    if (!stream) { say('Pehle Shuru dabayein, phir note camera ke saamne rakhiye.', { force: true }); return; }
+    say('Note camera ke saamne rakhiye, main padhta hoon. Ruk jaiye.', { force: true });
+    try {
+      const c = document.createElement('canvas');
+      c.width = video.videoWidth; c.height = video.videoHeight;
+      c.getContext('2d').drawImage(video, 0, 0);
+      if (!ocrWorker) ocrWorker = await Tesseract.createWorker('eng');
+      const { data } = await ocrWorker.recognize(c);
+      const tokens = data.text.split(/\s+/).map(t => t.replace(/[^0-9]/g, '')).filter(Boolean);
+      let best = null, count = 0;
+      for (const d of DENOMS) {
+        const n = tokens.filter(t => t === String(d)).length;
+        if (n > count) { best = d; count = n; }
+      }
+      if (best) say(`Yeh ${best} rupaye ka note lagta hai.`, { force: true });
+      else say('Note saaf nahi dikh raha. Thoda paas laiye, seedha rakhiye, phir Paisa dabayein.', { force: true });
+    } catch (e) {
+      say('Note padhne mein dikkat aayi. Dobara try kariye.', { force: true });
+    }
+  }
+
+  // ---------- Drawing and loop ----------
+  function draw(preds) {
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.lineWidth = 4; ctx.font = '600 22px "Atkinson Hyperlegible", sans-serif';
+    for (const p of preds) {
+      if (p.score < 0.5) continue;
+      const col = OBSTACLES.has(p.class) ? '#fb7185' : '#5eead4';
+      const [x, y, w, h] = p.bbox;
+      ctx.strokeStyle = col; ctx.strokeRect(x, y, w, h);
+      const label = `${name(p.class)} ~${fmt(distanceM(p, canvas.width))}m`;
+      const tw = ctx.measureText(label).width + 12;
+      ctx.fillStyle = col; ctx.fillRect(x, Math.max(0, y - 30), tw, 30);
+      ctx.fillStyle = '#0b1020'; ctx.fillText(label, x + 6, Math.max(22, y - 7));
+    }
+  }
+
+  async function loop() {
+    if (!running) return;
+    try {
+      if (model && video.readyState >= 2) {
+        const preds = await model.detect(video);
+        draw(preds);
+        const vis = updateTracks(preds);
+        if (mode === 'rasta') rastaDecide(vis); else cheezDecide(vis);
+      }
+    } catch (e) { /* skip this frame */ }
+    loopTimer = setTimeout(loop, 150);
+  }
+
+  // ---------- Voice commands ----------
+  function handleCommand(t) {
+    if (!/jarvis|jaarvis|jarwis|jarves/.test(t)) return;
+    if (/rasta|raasta|obstacle|rukawat/.test(t)) setMode('rasta');
+    else if (/cheez|product|saman|item/.test(t)) setMode('product');
+    else if (/paisa|paise|currency|note/.test(t)) readCurrency();
+    else if (/dohra|repeat|phir se/.test(t)) say(lastText, { force: true });
+    else if (/ruk|stop|band karo/.test(t)) { speechSynthesis.cancel(); say('Theek hai, ruk gaya.', { force: true }); }
+    else say('Main sun raha hoon. Rasta, cheez, paisa ya dohrao bolein.', { force: true });
+  }
+
+  function startListening() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { logLine('Is browser mein voice commands nahi chalti. Buttons use kariye.'); return; }
+    rec = new SR();
+    rec.lang = 'en-IN'; rec.continuous = true; rec.interimResults = false;
+    rec.onresult = e => {
+      if (speechSynthesis.speaking) return;
+      handleCommand(e.results[e.results.length - 1][0].transcript.toLowerCase());
+    };
+    rec.onend = () => { if (voiceOn) try { rec.start(); } catch (_) {} };
+    rec.onerror = () => {};
+    try { rec.start(); voiceOn = true; } catch (_) {}
+    $('#voiceBtn').setAttribute('aria-pressed', 'true');
+    $('#voiceBtn').textContent = 'Voice on';
+  }
+
+  function stopListening() {
+    voiceOn = false;
+    if (rec) try { rec.stop(); } catch (_) {}
+    $('#voiceBtn').setAttribute('aria-pressed', 'false');
+    $('#voiceBtn').textContent = 'Voice off';
+  }
+
+  // ---------- Controls ----------
+  function setMode(m) {
+    mode = m; tracks = []; lastNearestText = ''; lastClearAt = 0; lastNoneAt = 0;
+    document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+    say(m === 'rasta' ? 'Rasta mode chalu hai. Main raaste ki rukawat batata hoon.'
+                      : 'Cheez mode chalu hai. Main saamne ki cheezein batata hoon.', { force: true });
+  }
+
+  async function start() {
+    startBtn.textContent = 'Ruko';
+    startBtn.dataset.running = 'true';
+    say('Jarvis chalu hai. Rasta dekh raha hoon.', { force: true });
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw { name: 'SecurityError' };
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      video.srcObject = stream;
+      await video.play();
+      $('#empty').hidden = true;
+    } catch (e) {
+      const reasons = {
+        NotAllowedError: 'Camera ki permission band hai. Phone ki Settings mein jaiye, apna browser (Chrome ya Safari) khol kar Camera ko Allow kariye, phir is page ko refresh karke Shuru dabayein.',
+        SecurityError: 'Camera sirf Chrome ya Safari mein chalta hai. Is link ko Chrome ya Safari mein khol kar try kariye.',
+        NotFoundError: 'Is device par camera nahi mila.',
+        NotReadableError: 'Camera kisi aur app mein use ho raha hai. Woh app band karke dobara try kariye.',
+        OverconstrainedError: 'Camera ki setting match nahi hui. Dusra camera try kariye.',
+        AbortError: 'Camera start hone se pehle ruk gaya. Dobara Shuru dabayein.'
+      };
+      const msg = reasons[e && e.name] || ('Camera nahi khul paya' + (e && e.name ? ' (' + e.name + ')' : '') + '. Page ko naye tab mein khol kar dobara try kariye.');
+      say(msg, { urgent: true });
+      stop(true);
+      return;
+    }
+    try {
+      statusEl.textContent = 'Model load ho raha hai, thoda ruk jaiye...';
+      model = model || await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+    } catch (e) {
+      say('Detection model load nahi hua. Internet check kariye aur dobara koshish kariye.', { urgent: true });
+      stop(true);
+      return;
+    }
+    running = true;
+    mode = 'rasta'; tracks = [];
+    say('Rasta dekh raha hoon. Seedha chaliye, main bataata rahunga.', { force: true });
+    startListening();
+    loop();
+  }
+
+  function stop(quiet) {
+    running = false;
+    clearTimeout(loopTimer);
+    stopListening();
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null; video.srcObject = null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    tracks = [];
+    $('#empty').hidden = false;
+    startBtn.textContent = 'Shuru'; startBtn.dataset.running = 'false';
+    if (!quiet) say('Jarvis band ho gaya. Phir milte hain.', { force: true });
+  }
+
+  startBtn.addEventListener('click', () => (running || stream) ? stop(false) : start());
+  document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  $('#currencyBtn').addEventListener('click', readCurrency);
+  $('#repeatBtn').addEventListener('click', () => say(lastText, { force: true }));
+  $('#voiceBtn').addEventListener('click', () => { voiceOn ? stopListening() : startListening(); });
+
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'r') setMode('rasta');
+    if (e.key === 'c') setMode('product');
+    if (e.key === 'p') readCurrency();
+    if (e.key === 'd') say(lastText, { force: true });
+  });
+})();
+</script>
+</body>
+</html>
